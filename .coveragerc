@@ -2,3 +2,4 @@
 omit =
     */site-packages/*
     */dist-packages/*
+    */__init__.py
