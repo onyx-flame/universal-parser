@@ -1,4 +1,4 @@
-import argparse
+'''import argparse
 import configparser
 from universal_parser.serializer_factory import SerializerFactory
 from universal_parser.logger.logger import get_logger
@@ -33,4 +33,71 @@ try:
         raise ValueError('Some arguments left unfilled')
     parse(old_format, new_format, file_path)
 except Exception as error:
-    logger.error(error, exc_info=True)
+    logger.error(error, exc_info=True)'''
+
+import configparser
+import inspect
+import types
+
+from universal_parser.serializer_factory import SerializerFactory
+import universal_parser.student as peepo
+from universal_parser.object_converter import refactor_object, restore_object, class_to_dict, dict_to_class
+
+
+
+factory = SerializerFactory()
+parser = factory.get_serializer('json')
+print(peepo.Student.__module__)
+
+obj = peepo.Student
+
+dic = {'type': 'class', 'attributes': {}}
+if inspect.isclass(obj):
+
+    print('\n')
+    for attribute in dir(obj):
+
+        if not attribute.startswith('__') or attribute == '__init__':
+            value = getattr(obj, attribute)
+        else:
+            continue
+        dic['attributes'][attribute] = refactor_object(value)
+
+#dic_js = parser.dumps(dic)
+
+st = type("Stud",
+          (object, ),
+          {})
+
+print(st)
+
+s = peepo.Student(1, 'Kostya', 'Tolok', 4)
+#k = st(1, 'Kostya', 'Tolok', 4)
+# print(k.sayHello())
+
+print(st)
+#k.hello()
+#s.hello()
+
+'''print(123432, [i for i in dir(Student) if callable(getattr(Student, i))])
+print(dir(Student))
+'''
+def trash():
+    return 1
+
+
+print(parser.dumps(class_to_dict(peepo.Student)))
+print(dict_to_class(class_to_dict(peepo.Student)))
+
+
+stud_revive = parser.loads(parser.dumps(peepo.Student))
+#stud_revive.hello()
+
+vals = {1: peepo.Student(1, 'Kostya', 'Tolok', 4), 2: {3 : {4: peepo.Student(1, 'Kostya', 'Tolok', 4)}}, 5: peepo.Student(1, 'Kostya', 'Tolok', 4)}
+print(vals)
+print(parser.loads(parser.dumps(vals)))
+
+print(parser.loads(parser.dumps(peepo.MyTest)))
+k = types.SimpleNamespace(name='Mike', age=25, gender='male', hfs=trash)
+print(vars(k))
+print(parser.loads(parser.dumps(peepo.Student)))

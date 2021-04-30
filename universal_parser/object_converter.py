@@ -1,5 +1,4 @@
 import dis
-import inspect
 import opcode
 import weakref
 import types
@@ -7,7 +6,7 @@ import copy
 import importlib
 
 
-def is_class_instance2(o):
+def is_class_instance(o):
     return bool(type(o).__flags__ & (1 << 9))
 
 
@@ -27,12 +26,12 @@ def extract_code_globals(co):
             for const in co.co_consts:
                 if isinstance(const, types.CodeType):
                     out_names |= extract_code_globals(const)
-
         weakref.WeakKeyDictionary()[co] = out_names
     return out_names
 
 
-def refactor_dict(new_obj):
+def refactor_dict(obj):
+    new_obj = copy.copy(obj)
     for i in new_obj:
         if type(new_obj[i]) in (int, float, bool, str, type(None)):
             continue
@@ -40,16 +39,21 @@ def refactor_dict(new_obj):
             new_obj[i] = refactor_list(new_obj[i])
         elif type(new_obj[i]) is tuple:
             new_obj[i] = refactor_list(list(new_obj[i]))
-        elif isinstance(new_obj[i], types.FunctionType):
+        elif isinstance(new_obj[i], types.FunctionType) or isinstance(new_obj, types.MethodType):
             new_obj[i] = function_to_dict(new_obj[i])
+        elif isinstance(new_obj[i], type):
+            new_obj[i] = class_to_dict(new_obj[i])
         elif type(new_obj[i]) is dict:
             new_obj[i] = refactor_dict(new_obj[i])
-        elif is_class_instance2(new_obj[i]):
+        elif is_class_instance(new_obj[i]):
             new_obj[i] = class_instance_to_dict(new_obj[i])
+        else:
+            raise ValueError(f"{type(new_obj)} isn't supported")
     return new_obj
 
 
-def refactor_list(new_obj):
+def refactor_list(obj):
+    new_obj = copy.copy(obj)
     for i in range(len(new_obj)):
         if type(new_obj[i]) in (int, float, bool, str, type(None)):
             continue
@@ -57,14 +61,16 @@ def refactor_list(new_obj):
             new_obj[i] = refactor_list(new_obj[i])
         elif type(new_obj[i]) is tuple:
             new_obj[i] = refactor_list(list(new_obj[i]))
-        elif isinstance(new_obj[i], types.FunctionType):
+        elif isinstance(new_obj[i], types.FunctionType) or isinstance(new_obj, types.MethodType):
             new_obj[i] = function_to_dict(new_obj[i])
+        elif isinstance(new_obj[i], type):
+            new_obj[i] = class_to_dict(new_obj[i])
         elif type(new_obj[i]) is dict:
             new_obj[i] = refactor_dict(new_obj[i])
-        elif is_class_instance2(new_obj[i]):
+        elif is_class_instance(new_obj[i]):
             new_obj[i] = class_instance_to_dict(new_obj[i])
         else:
-            raise ValueError
+            raise ValueError(f"{type(new_obj)} isn't supported")
     return new_obj
 
 
@@ -76,32 +82,49 @@ def refactor_object(obj):
         return refactor_list(new_obj)
     elif type(new_obj) is tuple:
         return refactor_list(list(new_obj))
-    elif isinstance(new_obj, types.FunctionType):
+    elif isinstance(new_obj, types.FunctionType) or isinstance(new_obj, types.MethodType):
         return function_to_dict(new_obj)
     elif type(new_obj) is dict:
         return refactor_dict(new_obj)
-    elif is_class_instance2(new_obj):
+    elif isinstance(new_obj, type):
+        return class_to_dict(obj)
+    elif is_class_instance(new_obj):
         return class_instance_to_dict(new_obj)
     else:
         raise ValueError(f"{type(new_obj)} isn't supported")
 
 
 def restore_object(obj):
-    new_obj = copy.copy(obj)
-    if type(new_obj) is list:
-        for i in range(len(new_obj)):
-            if type(new_obj[i]) is dict:
-                if new_obj[i].get('type') == 'function':
-                    new_obj[i] = dict_to_function(new_obj[i])
-    elif type(new_obj) is dict:
-        if new_obj.get('type') == 'function':
-            new_obj = dict_to_function(obj)
+    if type(obj) in (int, float, bool, str, type(None)):
+        pass
+    elif type(obj) is list:
+        for i in range(len(obj)):
+            obj[i] = restore_object(obj[i])
+    elif type(obj) is dict:
+        if obj.get('type') == 'function':
+            obj = dict_to_function(obj)
+        elif obj.get('type') == 'class':
+            obj = dict_to_class(obj)
+        elif obj.get('type') == 'class_instance':
+            obj = dict_to_class_instance(obj)
         else:
-            for i in new_obj:
-                if type(new_obj[i]) is dict:
-                    if new_obj[i].get('type') == 'function':
-                        new_obj[i] = dict_to_function(new_obj[i])
-    return new_obj
+            for i in obj:
+                obj[i] = restore_object(obj[i])
+    return obj
+
+
+def function_to_dict(obj):
+    used_globals_names = [item for item in extract_code_globals(obj.__code__)]
+    globs_dct = {}
+    for x in used_globals_names:
+        if obj.__globals__.get(x) is not None:
+            if isinstance(obj.__globals__.get(x), types.ModuleType):
+                globs_dct[x] = "module"
+            else:
+                globs_dct[x] = obj.__globals__[x]
+    globs_dct['__builtins__'] = 'module'
+    source = get_function_code_attributes(obj)
+    return {'type': 'function', 'source': source, "globals": globs_dct}
 
 
 def dict_to_function(obj):
@@ -120,23 +143,38 @@ def dict_to_function(obj):
     return types.FunctionType(function_code, function_globals)
 
 
-def function_to_dict(obj):
-    used_globals_names = [item for item in extract_code_globals(obj.__code__)]
-    globs_dct = {}
-    for x in used_globals_names:
-        if obj.__globals__.get(x) is not None:
-            if inspect.ismodule(obj.__globals__.get(x)):
-                globs_dct[x] = "module"
-            else:
-                globs_dct[x] = obj.__globals__[x]
-    globs_dct['__builtins__'] = 'module'
-    source = get_function_code_attributes(obj)
-    return {'type': 'function', 'source': source, "globals": globs_dct}
+def class_to_dict(obj):
+    class_attributes = {}
+    for attribute in dir(obj):
+        if not attribute.startswith('__'):
+            value = getattr(obj, attribute)
+        elif attribute == '__init__':
+            value = getattr(obj, attribute)
+            if not isinstance(value, types.FunctionType):
+                continue
+        else:
+            continue
+        class_attributes[attribute] = refactor_object(value)
+    return {'type': 'class', 'name': obj.__name__, 'attributes': class_attributes}
+
+
+def dict_to_class(obj):
+    return type(obj['name'], (), restore_object(obj['attributes']))
 
 
 def class_instance_to_dict(obj):
-    variables = vars(obj)
-    return refactor_dict(variables)
+    class_attributes = {}
+    for attribute in dir(obj):
+        if not attribute.startswith('__'):
+            value = getattr(obj, attribute)
+        else:
+            continue
+        class_attributes[attribute] = refactor_object(value)
+    return {'type': 'class_instance', 'name': obj.__class__.__name__, 'attributes': class_attributes}
+
+
+def dict_to_class_instance(obj):
+    return type(obj['name'], (), restore_object(obj['attributes']))()
 
 
 def get_function_code_attributes(obj):
