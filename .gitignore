@@ -4,3 +4,5 @@ __pycache__/
 .idea/
 htmlcov/
 .coverage
+*egg-info/
+venv/
