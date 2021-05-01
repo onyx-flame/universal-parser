@@ -4,8 +4,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="universal-parser-onyx_flame",
-    version="1.0.6",
+    name="universal-parser",
+    version="1.0.1",
     author="Vyacheslav Zakharchuk",
     author_email="sovenok997@gmail.com",
     description="Json/Pickle/Toml/Yaml parser",
@@ -22,6 +22,9 @@ setuptools.setup(
     ],
     scripts=['scripts/format_converter'],
     packages=setuptools.find_packages(),
-    install_requires=['PyYaml', 'pytomlpp', ],
+    install_requires=[
+        'PyYAML>=5.4.1',
+        'pytomlpp>=0.3.5',
+        ],
     python_requires=">=3.6",
 )
