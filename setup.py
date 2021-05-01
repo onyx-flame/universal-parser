@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="universal-parser",
-    version="1.0.1",
+    version="1.0.9",
     author="Vyacheslav Zakharchuk",
     author_email="sovenok997@gmail.com",
     description="Json/Pickle/Toml/Yaml parser",
@@ -20,7 +20,9 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    scripts=['scripts/format_converter'],
+    entry_points = {
+        'console_scripts': ['format_converter=universal_parser.main:main'],
+    },
     packages=setuptools.find_packages(),
     install_requires=[
         'PyYAML>=5.4.1',
